@@ -4,10 +4,14 @@ name: 自动同步上游仓库
 on:
 
   schedule:
-    # UTC 每2小时执行一次
+
+    # UTC 每2小时同步一次
+
     - cron: "0 */2 * * *"
 
+
   workflow_dispatch:
+
 
 
 
@@ -17,15 +21,23 @@ permissions:
 
 
 
+
 env:
 
+
+  # 上游仓库
+
   UPSTREAM_REPO: hex-ci/Microsoft-Rewards-Script
+
+
+  # 当前仓库
 
   TARGET_REPO: wolfing88/Microsoft-Rewards-Script
 
 
 
 jobs:
+
 
   sync:
 
@@ -37,88 +49,60 @@ jobs:
     steps:
 
 
-      # =====================================
-      # Checkout 当前仓库
-      # =====================================
 
-      - name: Checkout repository
+      # =================================
+      # Checkout sync 分支
+      # =================================
+
+      - name: Checkout sync branch
+
 
         uses: actions/checkout@v4
 
+
         with:
 
+
+          ref: sync
+
+
           fetch-depth: 0
+
 
           token: ${{ secrets.SYNC_TOKEN }}
 
 
 
-      # =====================================
+
+
+
+      # =================================
       # Git 配置
-      # =====================================
+      # =================================
 
       - name: Configure git
 
+
         run: |
 
+
           git config user.name "github-actions[bot]"
+
 
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
 
 
-      # =====================================
-      # 备份自己的 sync-fork.yml
-      # 记录它所在分支
-      # =====================================
-
-      - name: Backup self workflow
-
-        run: |
-
-
-          CURRENT_BRANCH=$(git branch --show-current)
-
-
-          echo "$CURRENT_BRANCH" > /tmp/original_branch
-
-
-
-          echo "当前 workflow 所在分支:"
-
-          cat /tmp/original_branch
-
-
-
-          mkdir -p /tmp/workflow_backup
-
-
-
-          if [ -f ".github/workflows/sync-fork.yml" ];
-
-          then
-
-            cp \
-            .github/workflows/sync-fork.yml \
-            /tmp/workflow_backup/sync-fork.yml
-
-            echo "workflow 已备份"
-
-          else
-
-            echo "没有找到 sync-fork.yml"
-
-          fi
 
 
 
 
-
-      # =====================================
-      # 拉取 upstream
-      # =====================================
+      # =================================
+      # 添加 upstream
+      # =================================
 
       - name: Fetch upstream
+
 
         run: |
 
@@ -132,6 +116,7 @@ jobs:
 
 
 
+
           git fetch upstream --prune
 
 
@@ -142,13 +127,21 @@ jobs:
 
 
 
-      # =====================================
-      # 同步所有分支
-      # =====================================
 
-      - name: Sync branches
+
+
+      # =================================
+      # 同步所有分支
+      # =================================
+
+      - name: Sync all branches
+
 
         run: |
+
+
+          echo "获取 upstream 分支"
+
 
 
           branches=$(git for-each-ref \
@@ -161,33 +154,46 @@ jobs:
 
           echo "发现分支:"
 
+
           echo "$branches"
+
+
 
 
 
           for branch in $branches
 
+
           do
+
 
 
             echo ""
 
-            echo "===================================="
+
+            echo "=================================="
+
 
             echo "同步分支: $branch"
 
-            echo "===================================="
+
+            echo "=================================="
 
 
 
-            # 创建本地分支完全匹配 upstream
+
+            # 创建临时分支指向 upstream
+
 
             git checkout -B "$branch" \
             "upstream/$branch"
 
 
 
-            # 强制推送
+
+
+            # 强制覆盖目标分支
+
 
             git push \
             https://${{ secrets.SYNC_TOKEN }}@github.com/${TARGET_REPO}.git \
@@ -196,7 +202,10 @@ jobs:
 
 
 
-            echo "✅ $branch 同步完成"
+
+
+            echo "✅ $branch 完成"
+
 
 
           done
@@ -205,16 +214,19 @@ jobs:
 
 
 
-      # =====================================
+
+
+      # =================================
       # 同步 tags
-      # =====================================
+      # =================================
 
       - name: Sync tags
+
 
         run: |
 
 
-          echo "开始同步 tags"
+          echo "同步 tags"
 
 
 
@@ -224,73 +236,26 @@ jobs:
 
 
 
-          echo "✅ tags 同步完成"
+          echo "✅ tags 完成"
 
 
 
 
 
-      # =====================================
-      # 恢复自己的 workflow
-      # 回原本分支
-      # =====================================
 
-      - name: Restore self workflow
+
+      # =================================
+      # 返回 sync 分支
+      # =================================
+
+      - name: Restore sync branch
+
 
         run: |
 
 
-          ORIGINAL_BRANCH=$(cat /tmp/original_branch)
-
-
-          echo "恢复 workflow 到分支:"
-
-          echo "$ORIGINAL_BRANCH"
+          git checkout sync
 
 
 
-          git checkout "$ORIGINAL_BRANCH"
-
-
-
-          if [ -f "/tmp/workflow_backup/sync-fork.yml" ];
-
-          then
-
-
-            mkdir -p .github/workflows
-
-
-
-            cp \
-            /tmp/workflow_backup/sync-fork.yml \
-            .github/workflows/sync-fork.yml
-
-
-
-            git add .github/workflows/sync-fork.yml
-
-
-
-            git commit \
-            -m "Update sync-fork workflow" \
-            || true
-
-
-
-            git push \
-            https://${{ secrets.SYNC_TOKEN }}@github.com/${TARGET_REPO}.git \
-            "$ORIGINAL_BRANCH:$ORIGINAL_BRANCH"
-
-
-
-            echo "✅ sync-fork.yml 恢复完成"
-
-
-          else
-
-
-            echo "没有需要恢复的 workflow"
-
-
-          fi
+          echo "sync workflow 分支保持不变"
