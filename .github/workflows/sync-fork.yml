@@ -10,29 +10,26 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: 检出本地独立分支
-        uses: actions/checkout@v4
-        with:
-          # 必须显式指定你的独立分支，防止 Actions 误切到默认分支
-          ref: 'sync-hub'
-          # 取消默认凭证，改用我们自己的高权限 TOKEN
-          persist-credentials: false
-
       - name: 配置 Git 并强制全量同步所有分支
         run: |
-          # 1. 配置 Git 身份（Actions 规范要求）
+          # 1. 初始化空白本地仓库
+          git init
+          
+          # 2. 配置 Git 身份
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 2. 添加上游原作者的仓库作为远程源，命名为 upstream
+          # 3. 添加上游原作者的仓库作为远程源
           git remote add upstream https://github.com/hex-ci/Microsoft-Rewards-Script.git
           
-          # 3. 抓取上游的所有分支和提交历史
+          # 4. 抓取上游的所有分支和提交历史
           git fetch upstream --prune
           
-          # 4. 将上游的所有分支，强制推送到你自己的仓库（用你配置的 SYNC_TOKEN 认证）
-          # 注意：后面加了限制，确保绝对不会影响或覆盖你当前正在运行的这个 'sync-hub' 独立分支
+          # 5. 一行命令全量同步，并为未来的 'sync' 分支提供安全防御：
+          # 如果原作者以后建了 sync 分支，会被自动同步为你仓库里的 'upstream-sync' 分支，
+          # 从而确保你当前正在跑脚本的 'sync' 分支在任何时候都绝对安全！
           git push "https://${{ secrets.SYNC_TOKEN }}@github.com/${{ github.repository }}.git" \
+            "+refs/remotes/upstream/sync:refs/heads/upstream-sync" \
             "+refs/remotes/upstream/*:refs/heads/*" \
             --force \
             --tags
