@@ -12,24 +12,27 @@ jobs:
     steps:
       - name: 配置 Git 并强制全量同步所有分支
         run: |
-          # 1. 初始化空白本地仓库
+          # 1. 明确指定初始化默认分支为 sync，同时关掉提示，解决提示警告
+          git config --global init.defaultBranch sync
+          git config --global advice.defaultBranchName false
+          
+          # 2. 初始化空白本地仓库
           git init
           
-          # 2. 配置 Git 身份
+          # 3. 配置 Git 身份
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 3. 添加上游原作者的仓库作为远程源
+          # 4. 添加上游原作者的仓库作为远程源
           git remote add upstream https://github.com/hex-ci/Microsoft-Rewards-Script.git
           
-          # 4. 抓取上游的所有分支和提交历史
+          # 5. 抓取上游的所有分支和提交历史
           git fetch upstream --prune
           
-          # 5. 一行命令全量同步，并为未来的 'sync' 分支提供安全防御：
-          # 如果原作者以后建了 sync 分支，会被自动同步为你仓库里的 'upstream-sync' 分支，
-          # 从而确保你当前正在跑脚本的 'sync' 分支在任何时候都绝对安全！
+          # 6. 全量同步：只推送上游确实存在的全部分支
+          # 因为原作者仓库里没有 sync 分支，所以这里绝对不会有任何东西写入你仓库的 sync 分支，
+          # 你的脚本文件在此处是绝对安全的！
           git push "https://${{ secrets.SYNC_TOKEN }}@github.com/${{ github.repository }}.git" \
-            "+refs/remotes/upstream/sync:refs/heads/upstream-sync" \
             "+refs/remotes/upstream/*:refs/heads/*" \
             --force \
             --tags
