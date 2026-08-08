@@ -1,0 +1,180 @@
+name: 自动同步上游仓库
+
+
+on:
+
+  schedule:
+    - cron: "0 */2 * * *"
+
+  workflow_dispatch:
+
+
+
+permissions:
+
+  contents: write
+
+
+
+env:
+
+  UPSTREAM_REPO: TheNetsky/Microsoft-Rewards-Script
+
+  TARGET_REPO: wolfing88/Microsoft-Rewards-Script
+
+
+
+jobs:
+
+  sync:
+
+    runs-on: ubuntu-latest
+
+
+    steps:
+
+
+      - name: Checkout repository
+
+        uses: actions/checkout@v4
+
+        with:
+
+          fetch-depth: 0
+
+          token: ${{ secrets.SYNC_TOKEN }}
+
+
+
+      - name: Configure git
+
+        run: |
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+
+      - name: Fetch upstream
+
+        run: |
+
+          if git remote | grep -q upstream; then
+            git remote remove upstream
+          fi
+
+
+          git remote add upstream \
+          https://github.com/${UPSTREAM_REPO}.git
+
+
+          git fetch upstream --prune
+
+
+          git fetch upstream --tags --force
+
+
+
+      - name: Sync branches
+
+        run: |
+
+
+          branches=$(git for-each-ref \
+          --format='%(refname)' \
+          refs/remotes/upstream/ \
+          | sed 's#refs/remotes/upstream/##' \
+          | grep -v '^HEAD$')
+
+
+          echo "发现分支:"
+          echo "$branches"
+
+
+
+          for branch in $branches
+
+          do
+
+            echo ""
+            echo "===================================="
+            echo "开始同步分支：$branch"
+            echo "===================================="
+
+
+
+            # 保存自己的 workflow
+
+            rm -rf /tmp/self-workflow
+
+            mkdir -p /tmp/self-workflow
+
+
+            if [ -f ".github/workflows/sync-fork.yml" ]; then
+
+              cp \
+              .github/workflows/sync-fork.yml \
+              /tmp/self-workflow/sync-fork.yml
+
+            fi
+
+
+
+            # 同步上游分支
+
+            git checkout -B "$branch" \
+            "upstream/$branch"
+
+
+
+            # 恢复自己的 workflow
+
+            if [ -f "/tmp/self-workflow/sync-fork.yml" ]; then
+
+              mkdir -p .github/workflows
+
+              cp \
+              /tmp/self-workflow/sync-fork.yml \
+              .github/workflows/sync-fork.yml
+
+            fi
+
+
+
+            git add .
+
+            git commit \
+            -m "Auto recover self workflow sync-fork.yml" \
+            || true
+
+
+
+            git push \
+            https://${{ secrets.SYNC_TOKEN }}@github.com/${TARGET_REPO}.git \
+            "$branch:$branch" \
+            --force
+
+
+
+            echo "✅ 分支 $branch 同步完成"
+
+
+          done
+
+
+
+      - name: Sync tags
+
+        run: |
+
+
+          echo "开始同步 tags"
+
+
+          git push \
+          https://${{ secrets.SYNC_TOKEN }}@github.com/${TARGET_REPO}.git \
+          "+refs/tags/*:refs/tags/*"
+
+
+
+          echo "✅ tags 同步完成"
